@@ -37,7 +37,7 @@ extern "C" {
 #include "c_buffer.h"
 
 #ifndef DATA_STREAM_BUFFER_SIZE
-#define DATA_STREAM_BUFFER_SIZE 150
+#define DATA_STREAM_BUFFER_SIZE 50
 #endif /* DATA_STREAM_BUFFER_SIZE  */
 
 #ifndef DATA_STREAM_NUM_STREAM_BUFFERS
