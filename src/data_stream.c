@@ -37,12 +37,42 @@
 #define LOG_DEBUG(f_, ...)//printf((f_), ##__VA_ARGS__)
 #endif
 
+#ifndef UNUSED
+#define UNUSED(x) (void)(x)
+#endif
+
+__attribute__((weak)) int32_t dataStreamLockAcquire(dataStream_t *inst) {
+    UNUSED(inst);
+    return DATA_STREAM_SUCCESS;
+}
+__attribute__((weak)) int32_t dataStreamLockRelease(dataStream_t *inst) {
+    UNUSED(inst);
+    return DATA_STREAM_SUCCESS;
+}
+__attribute__((weak)) int32_t dataStreamLockInit(dataStream_t *inst) {
+    UNUSED(inst);
+    return DATA_STREAM_SUCCESS;
+}
+__attribute__((weak)) int32_t dataStreamLockDeInit(dataStream_t *inst) {
+    UNUSED(inst);
+    return DATA_STREAM_SUCCESS;
+}
+
+int32_t dataStreamDeInit(dataStream_t *inst) {
+    return dataStreamLockDeInit(inst);
+}
+
 int32_t dataStreamInit(dataStream_t *inst) {
 
     inst->buffer_out_state            = (1 << DATA_STREAM_NUM_STREAM_BUFFERS) - 1;
     inst->buffer_ready_state          = 0x00;
 
     int32_t res = DATA_STREAM_SUCCESS;
+
+    // Init the lock
+    if ((res = dataStreamLockInit(inst)) != DATA_STREAM_SUCCESS) {
+        return res;
+    }
 
     // Init all Stream buffers
     for (uint32_t i = 0; i < DATA_STREAM_NUM_STREAM_BUFFERS; i++) {
@@ -67,10 +97,12 @@ int32_t dataStreamNotifyBufferReady(dataStream_t *inst, uint8_t buffer_id) {
 
     uint8_t buffer_mask = (1 << buffer_id);
 
+    dataStreamLockAcquire(inst);
     if (~inst->buffer_out_state & buffer_mask) {
         inst->buffer_ready_state |= 1 << buffer_id;
+        dataStreamLockRelease(inst);
     } else {
-        // Weird, why did someone tell us that a buffer that is not out is ready???
+        dataStreamLockRelease(inst);
         LOG("Invalid Notification: %#x %#x %u\n", inst->buffer_ready_state, inst->buffer_out_state, buffer_id);
     }
 
@@ -82,10 +114,12 @@ int32_t dataStreamGetNewBuffer(dataStream_t *inst, cBuffer_t **buf, uint8_t *buf
         return DATA_STREAM_NULL_ERROR;
     }
 
+    dataStreamLockAcquire(inst);
     uint32_t available = inst->buffer_out_state;
 
     // Check if there is any buffer available
     if ((available) == 0) {
+        dataStreamLockRelease(inst);
         LOG_DEBUG("NO BUFFER %#x %#x\n", inst->buffer_out_state);
         *buf       = NULL;
         *buffer_id = 0xFF;
@@ -96,13 +130,14 @@ int32_t dataStreamGetNewBuffer(dataStream_t *inst, cBuffer_t **buf, uint8_t *buf
     uint32_t idx = __builtin_ctz(available);
 
     if (idx >= DATA_STREAM_NUM_STREAM_BUFFERS) {
-        // Something is very bad if we end up here!
+        dataStreamLockRelease(inst);
         LOG("Invalid buffer index!\n");
         return DATA_STREAM_BUFFER_ERROR;
     }
 
     // mark it in-use
     inst->buffer_out_state &= ~(1u << idx);
+    dataStreamLockRelease(inst);
 
     // Populate parameters
     *buf       = &inst->buffers[idx].buffer;
@@ -117,10 +152,12 @@ int32_t dataStreamGetNextReadyBuffer(dataStream_t *inst, cBuffer_t **buf, uint8_
         return DATA_STREAM_NULL_ERROR;
     }
 
+    dataStreamLockAcquire(inst);
     uint32_t available = inst->buffer_ready_state;
 
     // Check if there is any buffer available
     if ((available) == 0) {
+        dataStreamLockRelease(inst);
         LOG_DEBUG("NO BUFFER %#x %#x\n", inst->buffer_out_state);
         *buf       = NULL;
         *buffer_id = 0xFF;
@@ -131,13 +168,14 @@ int32_t dataStreamGetNextReadyBuffer(dataStream_t *inst, cBuffer_t **buf, uint8_
     uint32_t idx = __builtin_ctz(available);
 
     if (idx >= DATA_STREAM_NUM_STREAM_BUFFERS) {
-        // Something is very bad if we end up here!
+        dataStreamLockRelease(inst);
         LOG("Invalid buffer index!\n");
         return DATA_STREAM_BUFFER_ERROR;
     }
 
     // Unmark the buffer, it is no longer ready
     inst->buffer_ready_state &= ~(1 << idx);
+    dataStreamLockRelease(inst);
 
     // Populate parameters
     *buf       = &inst->buffers[idx].buffer;
@@ -161,12 +199,15 @@ int32_t dataStreamAnyBufferReady(dataStream_t *inst) {
 int32_t dataStreamReturnBuffer(dataStream_t *inst, uint8_t buffer_id) {
     uint8_t buffer_mask = (1 << buffer_id);
 
+    dataStreamLockAcquire(inst);
     // Return a buffer only if it is out
     if (~inst->buffer_out_state & buffer_mask) {
         // Reset all flags related to this buffer
         inst->buffer_out_state |= 1 << buffer_id; // Mark the buffer as available
         inst->buffer_ready_state &= ~(1 << buffer_id);
+        dataStreamLockRelease(inst);
     } else {
+        dataStreamLockRelease(inst);
         LOG("Bad buffer return %u %u %u\n", inst->buffer_out_state, inst->buffer_ready_state, buffer_id);
         return DATA_STREAM_INVALID_ERROR;
     }
