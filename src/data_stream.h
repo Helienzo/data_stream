@@ -51,11 +51,16 @@ typedef enum {
     DATA_STREAM_INVALID_ERROR  = -60002,
     DATA_STREAM_BUFFER_ERROR   = -60003,
     DATA_STREAM_NO_BUF_ERROR   = -60004,
+    DATA_STREAM_LOCK_ERROR     = -60005,
 } dataStreamErr_t;
 
 typedef struct {
     volatile uint8_t buffer_out_state;   // Bitmask for what buffers out to either the producer or consumer
     volatile uint8_t buffer_ready_state; // Bitmask for what buffer ready for the consumer
+
+    // Lock data
+    uint32_t lock_state;
+    uint32_t lock_id;
 
     // Output Stream buffers
     struct {
@@ -65,9 +70,18 @@ typedef struct {
 } dataStream_t;
 
 /**
- * Init a data stream
+ * Initialize a data stream instance
+ * Input: dataStream instance
+ * Returns: dataStreamErr_t
  */
 int32_t dataStreamInit(dataStream_t *inst);
+
+/**
+ * De-Init the data stream
+ * Input: dataStream instance
+ * Returns: dataStreamErr_t
+ */
+int32_t dataStreamDeInit(dataStream_t *inst);
 
 /*
  * Notify that a stream buffer is ready to send, IRQ safe
