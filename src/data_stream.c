@@ -37,16 +37,24 @@
 #define LOG_DEBUG(f_, ...)//printf((f_), ##__VA_ARGS__)
 #endif
 
+#ifndef UNUSED
+#define UNUSED(x) (void)(x)
+#endif
+
 __attribute__((weak)) int32_t dataStreamLockAcquire(dataStream_t *inst) {
+    UNUSED(inst);
     return DATA_STREAM_SUCCESS;
 }
 __attribute__((weak)) int32_t dataStreamLockRelease(dataStream_t *inst) {
+    UNUSED(inst);
     return DATA_STREAM_SUCCESS;
 }
 __attribute__((weak)) int32_t dataStreamLockInit(dataStream_t *inst) {
+    UNUSED(inst);
     return DATA_STREAM_SUCCESS;
 }
 __attribute__((weak)) int32_t dataStreamLockDeInit(dataStream_t *inst) {
+    UNUSED(inst);
     return DATA_STREAM_SUCCESS;
 }
 
