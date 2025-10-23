@@ -52,11 +52,18 @@ typedef enum {
     DATA_STREAM_BUFFER_ERROR   = -60003,
     DATA_STREAM_NO_BUF_ERROR   = -60004,
     DATA_STREAM_LOCK_ERROR     = -60005,
+    DATA_STREAM_EARLY_RETURN   = -60006,
+    DATA_STREAM_DOUBLE_NOTIFY  = -60007,
 } dataStreamErr_t;
 
 typedef struct {
     volatile uint8_t buffer_out_state;   // Bitmask for what buffers out to either the producer or consumer
     volatile uint8_t buffer_ready_state; // Bitmask for what buffer ready for the consumer
+
+    // FIFO queue for ready buffer order
+    uint8_t ready_queue[DATA_STREAM_NUM_STREAM_BUFFERS];
+    volatile uint8_t ready_queue_head;   // Read position
+    volatile uint8_t ready_queue_tail;   // Write position
 
     // Lock data
     uint32_t lock_state;

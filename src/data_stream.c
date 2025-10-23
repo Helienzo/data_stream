@@ -66,6 +66,8 @@ int32_t dataStreamInit(dataStream_t *inst) {
 
     inst->buffer_out_state            = (1 << DATA_STREAM_NUM_STREAM_BUFFERS) - 1;
     inst->buffer_ready_state          = 0x00;
+    inst->ready_queue_head            = 0;
+    inst->ready_queue_tail            = 0;
 
     int32_t res = DATA_STREAM_SUCCESS;
 
@@ -98,8 +100,18 @@ int32_t dataStreamNotifyBufferReady(dataStream_t *inst, uint8_t buffer_id) {
     uint8_t buffer_mask = (1 << buffer_id);
 
     dataStreamLockAcquire(inst);
+
+    // Prevent double notify
+    if (inst->buffer_ready_state & buffer_mask) {
+        dataStreamLockRelease(inst);
+        LOG("Double notify %u\n", buffer_id);
+        return DATA_STREAM_DOUBLE_NOTIFY;
+    }
+
     if (~inst->buffer_out_state & buffer_mask) {
         inst->buffer_ready_state |= 1 << buffer_id;
+        inst->ready_queue[inst->ready_queue_tail] = buffer_id;
+        inst->ready_queue_tail = (inst->ready_queue_tail + 1) % DATA_STREAM_NUM_STREAM_BUFFERS;
         dataStreamLockRelease(inst);
     } else {
         dataStreamLockRelease(inst);
@@ -153,10 +165,9 @@ int32_t dataStreamGetNextReadyBuffer(dataStream_t *inst, cBuffer_t **buf, uint8_
     }
 
     dataStreamLockAcquire(inst);
-    uint32_t available = inst->buffer_ready_state;
 
-    // Check if there is any buffer available
-    if ((available) == 0) {
+    // Check if queue empty using bitmask
+    if (inst->buffer_ready_state == 0) {
         dataStreamLockRelease(inst);
         LOG_DEBUG("NO BUFFER %#x %#x\n", inst->buffer_out_state);
         *buf       = NULL;
@@ -164,23 +175,14 @@ int32_t dataStreamGetNextReadyBuffer(dataStream_t *inst, cBuffer_t **buf, uint8_
         return DATA_STREAM_NO_BUF_ERROR;
     }
 
-    // builtin_ctz returns index of least-significant 1 bit
-    uint32_t idx = __builtin_ctz(available);
-
-    if (idx >= DATA_STREAM_NUM_STREAM_BUFFERS) {
-        dataStreamLockRelease(inst);
-        LOG("Invalid buffer index!\n");
-        return DATA_STREAM_BUFFER_ERROR;
-    }
-
-    // Unmark the buffer, it is no longer ready
+    // Dequeue next ready buffer
+    uint8_t idx = inst->ready_queue[inst->ready_queue_head];
+    inst->ready_queue_head = (inst->ready_queue_head + 1) % DATA_STREAM_NUM_STREAM_BUFFERS;
     inst->buffer_ready_state &= ~(1 << idx);
     dataStreamLockRelease(inst);
 
-    // Populate parameters
     *buf       = &inst->buffers[idx].buffer;
-    *buffer_id = (uint8_t)idx;
-
+    *buffer_id = idx;
     return DATA_STREAM_DATA_AVAILABLE;
 }
 
@@ -197,14 +199,28 @@ int32_t dataStreamAnyBufferReady(dataStream_t *inst) {
 }
 
 int32_t dataStreamReturnBuffer(dataStream_t *inst, uint8_t buffer_id) {
+    if (inst == NULL) {
+        return DATA_STREAM_NULL_ERROR;
+    }
+
+    if (buffer_id >= DATA_STREAM_NUM_STREAM_BUFFERS) {
+        return DATA_STREAM_BUFFER_ERROR;
+    }
+
     uint8_t buffer_mask = (1 << buffer_id);
 
     dataStreamLockAcquire(inst);
+
+    // Prevent early return while buffer still ready
+    if (inst->buffer_ready_state & buffer_mask) {
+        dataStreamLockRelease(inst);
+        LOG("Early return %u\n", buffer_id);
+        return DATA_STREAM_EARLY_RETURN;
+    }
+
     // Return a buffer only if it is out
     if (~inst->buffer_out_state & buffer_mask) {
-        // Reset all flags related to this buffer
-        inst->buffer_out_state |= 1 << buffer_id; // Mark the buffer as available
-        inst->buffer_ready_state &= ~(1 << buffer_id);
+        inst->buffer_out_state |= 1 << buffer_id;
         dataStreamLockRelease(inst);
     } else {
         dataStreamLockRelease(inst);
