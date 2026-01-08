@@ -124,6 +124,13 @@ int32_t dataStreamGetNextReadyBuffer(dataStream_t *inst, cBuffer_t **buf, uint8_
 int32_t dataStreamAnyBufferReady(dataStream_t *inst);
 
 /**
+ * Get the number of buffers that are ready
+ * Input: datastream instance
+ * Returns: dataStreamErr_t or number of buffers if any
+ */
+int32_t dataStreamNumBuffersReady(dataStream_t *inst);
+
+/**
  * Return a buffer to the available pool
  * Input: datastream instance
  * Input: Buffer ID
