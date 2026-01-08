@@ -28,13 +28,22 @@
 
 #include "data_stream.h"
 #include "stdio.h"
+#include <stdarg.h>
+
+// Weakly defined logging function - can be overridden by user
+__attribute__((weak)) void util_log(const char *format, ...) {
+    va_list args;
+    va_start(args, format);
+    vprintf(format, args);
+    va_end(args);
+}
 
 #ifndef LOG
-#define LOG(f_, ...) printf((f_), ##__VA_ARGS__)
+#define LOG(f_, ...) util_log((f_), ##__VA_ARGS__)
 #endif
 
 #ifndef LOG_DEBUG
-#define LOG_DEBUG(f_, ...)//printf((f_), ##__VA_ARGS__)
+#define LOG_DEBUG(f_, ...)
 #endif
 
 #ifndef UNUSED
@@ -184,6 +193,14 @@ int32_t dataStreamGetNextReadyBuffer(dataStream_t *inst, cBuffer_t **buf, uint8_
     *buf       = &inst->buffers[idx].buffer;
     *buffer_id = idx;
     return DATA_STREAM_DATA_AVAILABLE;
+}
+
+int32_t dataStreamNumBuffersReady(dataStream_t *inst) {
+    if (inst == NULL) {
+        return DATA_STREAM_NULL_ERROR;
+    }
+
+    return __builtin_popcount(inst->buffer_ready_state);
 }
 
 int32_t dataStreamAnyBufferReady(dataStream_t *inst) {

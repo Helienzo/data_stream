@@ -133,7 +133,69 @@ int main(void) {
     res = dataStreamNotifyBufferReady(&stream, buf_id);
     TEST_ASSERT(res == DATA_STREAM_DOUBLE_NOTIFY);
 
-    // Test 14: Stress test with complex patterns over 512 cycles
+    // Test 14: dataStreamNumBuffersReady - NULL check
+    res = dataStreamNumBuffersReady(NULL);
+    TEST_ASSERT(res == DATA_STREAM_NULL_ERROR);
+
+    // Test 15: dataStreamNumBuffersReady - basic counting
+    dataStreamDeInit(&stream);
+    dataStreamInit(&stream);
+
+    // Initially, no buffers should be ready
+    res = dataStreamNumBuffersReady(&stream);
+    TEST_ASSERT(res == 0);
+
+    // Get and notify 1 buffer
+    res = dataStreamGetNewBuffer(&stream, &buf, &buf_id);
+    TEST_ASSERT(res == DATA_STREAM_SUCCESS);
+    res = dataStreamNotifyBufferReady(&stream, buf_id);
+    TEST_ASSERT(res == DATA_STREAM_SUCCESS);
+    res = dataStreamNumBuffersReady(&stream);
+    TEST_ASSERT(res == 1);
+
+    // Get and notify a second buffer
+    cBuffer_t *buf2;
+    uint8_t buf_id2;
+    res = dataStreamGetNewBuffer(&stream, &buf2, &buf_id2);
+    TEST_ASSERT(res == DATA_STREAM_SUCCESS);
+    res = dataStreamNotifyBufferReady(&stream, buf_id2);
+    TEST_ASSERT(res == DATA_STREAM_SUCCESS);
+    res = dataStreamNumBuffersReady(&stream);
+    TEST_ASSERT(res == 2);
+
+    // Get and notify a third buffer
+    cBuffer_t *buf3;
+    uint8_t buf_id3;
+    res = dataStreamGetNewBuffer(&stream, &buf3, &buf_id3);
+    TEST_ASSERT(res == DATA_STREAM_SUCCESS);
+    res = dataStreamNotifyBufferReady(&stream, buf_id3);
+    TEST_ASSERT(res == DATA_STREAM_SUCCESS);
+    res = dataStreamNumBuffersReady(&stream);
+    TEST_ASSERT(res == 3);
+
+    // Retrieve one buffer, count should decrease to 2
+    res = dataStreamGetNextReadyBuffer(&stream, &buf, &retrieved_id);
+    TEST_ASSERT(res == DATA_STREAM_DATA_AVAILABLE);
+    res = dataStreamNumBuffersReady(&stream);
+    TEST_ASSERT(res == 2);
+
+    // Retrieve another buffer, count should decrease to 1
+    res = dataStreamGetNextReadyBuffer(&stream, &buf, &retrieved_id);
+    TEST_ASSERT(res == DATA_STREAM_DATA_AVAILABLE);
+    res = dataStreamNumBuffersReady(&stream);
+    TEST_ASSERT(res == 1);
+
+    // Retrieve last buffer, count should be 0
+    res = dataStreamGetNextReadyBuffer(&stream, &buf, &retrieved_id);
+    TEST_ASSERT(res == DATA_STREAM_DATA_AVAILABLE);
+    res = dataStreamNumBuffersReady(&stream);
+    TEST_ASSERT(res == 0);
+
+    // Verify consistent with dataStreamAnyBufferReady
+    res = dataStreamAnyBufferReady(&stream);
+    TEST_ASSERT(res == DATA_STREAM_SUCCESS); // No buffers ready
+
+    // Test 16: Stress test with complex patterns over 512 cycles
     dataStreamDeInit(&stream);
     dataStreamInit(&stream);
 
@@ -152,10 +214,18 @@ int main(void) {
         res = dataStreamNotifyBufferReady(&stream, id2);
         TEST_ASSERT(res == DATA_STREAM_SUCCESS);
 
+        // Verify count is 2
+        res = dataStreamNumBuffersReady(&stream);
+        TEST_ASSERT(res == 2);
+
         // Retrieve and verify FIFO order
         res = dataStreamGetNextReadyBuffer(&stream, &buf, &buf_id);
         TEST_ASSERT(res == DATA_STREAM_DATA_AVAILABLE);
         TEST_ASSERT(buf_id == id1);
+
+        // Verify count is now 1
+        res = dataStreamNumBuffersReady(&stream);
+        TEST_ASSERT(res == 1);
 
         res = dataStreamReturnBuffer(&stream, buf_id);
         TEST_ASSERT(res == DATA_STREAM_SUCCESS);
@@ -163,6 +233,10 @@ int main(void) {
         res = dataStreamGetNextReadyBuffer(&stream, &buf, &buf_id);
         TEST_ASSERT(res == DATA_STREAM_DATA_AVAILABLE);
         TEST_ASSERT(buf_id == id2);
+
+        // Verify count is now 0
+        res = dataStreamNumBuffersReady(&stream);
+        TEST_ASSERT(res == 0);
 
         res = dataStreamReturnBuffer(&stream, buf_id);
         TEST_ASSERT(res == DATA_STREAM_SUCCESS);
@@ -183,15 +257,27 @@ int main(void) {
         res = dataStreamNotifyBufferReady(&stream, id1);
         TEST_ASSERT(res == DATA_STREAM_SUCCESS);
 
+        // Verify count is 2
+        res = dataStreamNumBuffersReady(&stream);
+        TEST_ASSERT(res == 2);
+
         res = dataStreamGetNextReadyBuffer(&stream, &buf, &buf_id);
         TEST_ASSERT(res == DATA_STREAM_DATA_AVAILABLE);
         TEST_ASSERT(buf_id == id3);
+
+        // Verify count is 1
+        res = dataStreamNumBuffersReady(&stream);
+        TEST_ASSERT(res == 1);
 
         res = dataStreamReturnBuffer(&stream, buf_id);
         TEST_ASSERT(res == DATA_STREAM_SUCCESS);
 
         res = dataStreamNotifyBufferReady(&stream, id2);
         TEST_ASSERT(res == DATA_STREAM_SUCCESS);
+
+        // Verify count is 2
+        res = dataStreamNumBuffersReady(&stream);
+        TEST_ASSERT(res == 2);
 
         res = dataStreamGetNextReadyBuffer(&stream, &buf, &buf_id);
         TEST_ASSERT(res == DATA_STREAM_DATA_AVAILABLE);
@@ -200,6 +286,10 @@ int main(void) {
         res = dataStreamGetNextReadyBuffer(&stream, &buf, &buf_id);
         TEST_ASSERT(res == DATA_STREAM_DATA_AVAILABLE);
         TEST_ASSERT(buf_id == id2);
+
+        // Verify count is 0
+        res = dataStreamNumBuffersReady(&stream);
+        TEST_ASSERT(res == 0);
 
         res = dataStreamReturnBuffer(&stream, id1);
         TEST_ASSERT(res == DATA_STREAM_SUCCESS);
